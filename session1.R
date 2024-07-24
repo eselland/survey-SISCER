@@ -86,3 +86,61 @@ svyciprop(~I(backpain=="yes"), design=nhis,method="mean") #but large enough samp
 ?svyciprop #will show the differences in methods for confidence intervals
 
 ## http://gdfe.co/srvyr/
+
+
+##### Session 2 #####
+
+svycoplot(backpain~age_p|sex,design=nhis,xbin=20)
+svyboxplot(age_p~interaction(sex,backpain), design=nhis)
+#logistic regression
+model0<-svyglm(backpain~age_p+bmi+sex+sickleave, design=nhis, family=quasibinomial)
+#quasibinomial used when weights are not integers
+coef(summary(model0))
+
+#can add splines
+library(splines)
+model1<-svyglm(backpain~ns(age_p,4)+ns(bmi,4)+sex+sickleave, design=nhis, family=quasibinomial)
+AIC(model1,model0)
+#the model with splines is better
+
+summary(model0)
+summary(model1)
+#the coefs are coefs of a spline basis --> the estimates dont tell us anything
+#the purpose is to fix a flexible curve, we aren't overfitting here bc we have soooo much data so we kinda just throw it in there?
+
+termplot(model0,terms=1,partial=TRUE,smooth=panel.smooth) #probably funky bc logistic
+
+#switching to neckpain
+byage<-svyby(~neckpain,~age_p, svymean, na.rm=TRUE, design=nhis)
+plot(byage$age_p, byage$neckpainyes) #looks like a hump, so we can split the linear fits
+neckmodel0<-svyglm(neckpain~age_p+bmi+sex+sickleave, design=nhis, family=quasibinomial)
+neckmodel1<-svyglm(neckpain~ns(age_p,4)+ns(bmi,4)+sex+sickleave, design=nhis, family=quasibinomial)
+  #4 degree of freedom cubic splines on age and bmi
+anova(neckmodel1,neckmodel0) #tells us that adding the splines makes a difference??
+neckmodel2<-svyglm(neckpain~pmin(age_p,50)+pmax(age_p,50)+bmi+sex+sickleave, design=nhis, family=quasibinomial)
+  ##trying linear splines (simpler splines)
+AIC(neckmodel0,neckmodel1,neckmodel2)
+neckmodel3<-svyglm(neckpain~(pmin(age_p,50)+pmax(age_p,50))*(sex+sickleave), design=nhis, family=quasibinomial)
+AIC(neckmodel1,neckmodel3)
+
+model2a<-svyglm(neckpain~pmin(age_p,50)+pmax(age_p,50)+I(age_p==85)+sex+sickleave, design=nhis, family=quasibinomial)
+#gives special indicator varaibale to 85+ because we think it is topcoded (anyone who is over than 85 just gets labeled 85 so it is overly large)
+summary(model2a)
+
+#backpain
+byage2<-svyby(~backpain,~age_p, svymean, na.rm=TRUE, design=nhis)
+plot(log(byage2$age_p), byage2$backpainyes)
+bmodel2<-svyglm(backpain~log(age_p)+sex+sickleave, design=nhis, family=quasibinomial)
+summary(bmodel2)
+bmodel3<-svyglm(backpain~log(age_p)*(sex+sickleave), design=nhis, family=quasibinomial)
+summary(bmodel3)
+bmodel4<-svyglm(backpain~log(age_p)+(sex+sickleave)+I(age_p==85), design=nhis, family=quasibinomial)
+summary(bmodel4) #top coding doesnt seem to make a difference
+
+regTermTest(bmodel3,~sex+sickleave) #looking at combined effects
+
+cov2cor(vcov(model2)) #most things work with these models like they would usually
+#most likely any code for VIFs would take survey modeling outputs
+
+
+
